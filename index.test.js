@@ -520,7 +520,7 @@ describe('Arena',()=>{
         expect(response.status).toBe(200)
     })
 
-    test('Can not add Element if element does not exists', async ()=>{
+    test('Can not add Element if element is outside dimensions', async ()=>{
         const response = await axios.post(`${BACKEND_URL}/space/element`,{
             elementId:elementId1,
             spaceId,
@@ -648,5 +648,233 @@ describe('Arena',()=>{
     })
     
     // See All available elements
+    test('Get all available elements',async()=>{
+        const response = await axios.get(`${BACKEND_URL}/elements`)
+
+        expect(response.status).toBe(200)
+        expect(response.data.elements.length).toBe(2)
+    })
+
+})
+
+// Admin
+describe('Admin Create endpoints',()=>{
+    let adminToken;
+    let userToken;
+
+    beforeAll(async ()=>{
+        // Create Admin
+        const adminName = 'abhay' + Date.now()
+        const adminPassword = '12345' + Date.now()
+
+        await registerUser(adminName,adminPassword,'admin')
+        const {data:d1} = await loginUser(adminName,adminPassword)
+
+        adminToken = d1.token
+        
+        // Create User
+        const username = 'abhay' + Date.now()
+        const password = '12345' + Date.now()
+
+        await registerUser(username,password,'admin')
+        const {data} = await loginUser(username,password)
+
+        userToken = data.token
+    })
+
+    // Create Elements
+    test('Admin can Create an element', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/element`,
+        {
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+            "width": 1,
+            "height": 1,
+            "static": true ,
+        },{
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(200)
+        expect(response.data.id).toBeDefined()
+    })
+  
+    test('Data is required while Creating elements', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/element`,
+            null
+            ,{
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(400)
+    })
+
+    // Update Elements
+    test('Admin can update an element', async ()=>{
+        const createResponse = await axios.post(`${BACKEND_URL}/admin/element`,
+            {
+                "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+                "width": 1,
+                "height": 1,
+                "static": true ,
+            },{
+                headers :{
+                    authorization: `Bearer ${adminToken}`
+                }
+            })
+        const elementId = createResponse.data.id
+
+        const response = await axios.put(`${BACKEND_URL}/admin/element/${elementId}`,
+        {
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+        },
+        {
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(200)
+    })
+
+    test('Cannot update if elementId doesnot exists', async ()=>{
+        const response = await axios.put(`${BACKEND_URL}/admin/element/xyz1234`,
+        {
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+        },
+        {
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(404)
+    })
+
+    // Create Avatar
+    test('Admin can Create an avatar', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/avatar`,
+        {
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQm3RFDZM21teuCMFYx_AROjt-AzUwDBROFww&s",
+            "name": "Timmy"
+        },
+        {
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(200)
+        expect(response.data.avatarId).toBeDefined()
+    })
+  
+    test('Data is required while Creating avatars', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/avatar`,
+            null
+            ,{
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(400)
+    })
+    
+    // Create Maps
+    test('Admin can Create maps', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/map`,
+            {
+                "thumbnail": "https://thumbnail.com/a.png",
+                "dimensions": "100x200",
+                "name": "100 person interview room",
+                "defaultElements": []
+            },
+            {
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(200)
+        expect(response.data.id).toBeDefined()
+    })
+  
+    test('Data is required while Creating avatars', async ()=>{
+        const response = await axios.post(`${BACKEND_URL}/admin/map`,
+            null
+            ,{
+            headers :{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+        expect(response.status).toBe(400)
+    })
+
+    // User cannot create elements,maps,avatars
+    test('User cannot Create an element', async ()=>{
+        const createElementResponse = await axios.post(`${BACKEND_URL}/admin/element`,
+        {
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+            "width": 1,
+            "height": 1,
+            "static": true ,
+        },
+        {
+            headers :{
+                authorization: `Bearer ${userToken}`
+            }
+        })
+
+        const updateElementResponse = await axios.put(`${BACKEND_URL}/admin/element/123`,
+            {
+                "imageUrl": "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcRCRca3wAR4zjPPTzeIY9rSwbbqB6bB2hVkoTXN4eerXOIkJTG1GpZ9ZqSGYafQPToWy_JTcmV5RHXsAsWQC3tKnMlH_CsibsSZ5oJtbakq&usqp=CAE",
+            },
+            {
+                headers :{
+                    authorization: `Bearer ${userToken}`
+                }
+        })
+
+        const createAvatarResponse = await axios.post(`${BACKEND_URL}/admin/avatar`,
+            {
+                "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQm3RFDZM21teuCMFYx_AROjt-AzUwDBROFww&s",
+                "name": "Timmy"
+            },
+            {
+                headers :{
+                    authorization: `Bearer ${userToken}`
+                }
+            })
+
+        const createMapResponse = await axios.post(`${BACKEND_URL}/admin/map`,
+            {
+                "thumbnail": "https://thumbnail.com/a.png",
+                "dimensions": "100x200",
+                "name": "100 person interview room",
+                "defaultElements": [{
+                        elementId: "chair1",
+                        x: 20,
+                        y: 20
+                    }, {
+                      elementId: "chair2",
+                        x: 18,
+                        y: 20
+                    }, {
+                      elementId: "table1",
+                        x: 19,
+                        y: 20
+                    }, {
+                      elementId: "table2",
+                        x: 19,
+                        y: 20
+                    }
+                ]
+             },
+            {
+                headers :{
+                    authorization: `Bearer ${userToken}`
+                    }
+            })
+        expect(createElementResponse.status).toBe(403)
+        expect(updateElementResponse.status).toBe(403)
+        expect(createAvatarResponse.status).toBe(403)
+        expect(createMapResponse.status).toBe(403)
+    })
 
 })
