@@ -1,6 +1,7 @@
 const  axios = require("axios");
 
-const BACKEND_URL = 'http://localhost:8000/api/v1'
+const BACKEND_URL = 'http://localhost:3000/api/v1'
+const WS_URL = 'ws://localhost:8080'
 
 
 // Signup User
@@ -878,3 +879,196 @@ describe('Admin Create endpoints',()=>{
     })
 
 })
+
+// ******************************************
+// WEBSOCKET TESTS
+// ******************************************
+
+describe('Tests for websocket',()=>{
+    let adminId 
+    let userId  
+    let adminToken  
+    let userToken  
+    let spaceId
+    let adminWsClient
+    let userWsClient
+    let adminMsg = []
+    let userMsg = []
+    let adminX
+    let adminY
+    let userX
+    let userY
+
+    const getWsResponse = (arr) =>{
+        let data = arr.shift()
+
+        if(data){
+            return data
+        }
+        else{
+            return new Promise((resolve)=>{
+                let interval = setInterval(()=>{
+                    let data = arr.shift()
+                    if(data){
+                        clearInterval(interval)
+                        resolve(data)
+                    }
+                },100)
+            })
+        }
+    }
+
+
+    beforeAll( async ()=>{
+        // Creating 2 users
+        const adminName = 'abhay' + Date.now()
+        const adminPass = '12345' + Date.now()
+        const username = 'abhay' + Date.now()
+        const password = '12345' + Date.now()
+        
+        const response1 = await registerUser(adminName,adminPass,'admin')
+        const response2 = await registerUser(username,password,'user')
+
+        adminId = response1.data.id
+        userId = response2.data.id
+   
+        const user1 = await loginUser(adminName,adminPass)
+        const user2 = await loginUser(username,password)
+
+        adminToken = user1.data.token
+        userToken = user2.data.token
+
+        // Creating an empty space (without map)
+        const spaceResponse = await axios.post(`${BACKEND_URL}/space`,{
+            "name": "Test",
+            "dimensions": "100x200",
+           },
+           {
+            headers:{
+                authorization: `Bearer ${adminToken}`
+            }
+        })
+
+        spaceId = spaceResponse.data.spaceId
+    
+        // Making 2 websocket connections
+        adminWsClient = new WebSocket(WS_URL)
+        userWsClient = new WebSocket(WS_URL)
+
+        await new Promise((r)=>{ adminWsClient.onopen = r})
+        adminWsClient.onmessage((message)=>{
+            adminMsg.push(JSON.parse(message))
+        })
+        
+        await new Promise((r)=>{ userWsClient.onopen = r})
+        userWsClient.onmessage((message)=>{
+            userMsg.push(JSON.parse(message))
+        })
+    })
+
+    test('User1 and User2 Successfully joined a room and got acknowledgement' , async ()=>{
+        // User1 joins
+        const joinPayload1 = {
+            "type": "join",
+            "payload": {
+                spaceId,
+                "token": adminToken
+            }
+        }
+        
+        adminWsClient.send(JSON.stringify(joinPayload1))
+       
+        const response1 = await getWsResponse(adminMsg)
+        adminX = response1.payload.spawn.x
+        adminY = response1.payload.spawn.y 
+
+        // User2 Joins
+        const joinPayload2 = {
+            "type": "join",
+            "payload": {
+                spaceId,
+                "token": userToken
+            }
+        }
+        
+        adminWsClient.send(JSON.stringify(joinPayload2))
+       
+        const response2 = await getWsResponse(userMsg)
+        userX = response2.payload.spawn.x
+        userY = response2.payload.spawn.y 
+
+        const response3 = await getWsResponse(adminMsg)
+        
+        expect(response1.type).toBe("space-joined")
+        expect(response1.payload.users[0].id).toBe(adminId)
+
+        expect(response2.type).toBe("space-joined")
+        expect(response2.payload.users[1].id).toBe(userId)
+        
+        expect(response3.type).toBe("user-join")
+        expect(response3.payload.userId).toBe(userId)
+        expect(response3.payload.x).toBe(userX)
+        expect(response3.payload.y).toBe(userY)
+    })
+
+    // test('Cannot join if space does not exist' , ()=>{
+    //     const joinPayload = {
+    //         "type": "join",
+    //         "payload": {
+    //             "spaceId": "123",
+    //             "token": adminToken
+    //         }
+    //     }
+    //     userWsClient.send(JSON.stringify(joinPayload))
+        
+    // })
+
+    test('Able to move one block at a time and broadcasted to every user' , async ()=>{
+        adminWsClient.send(JSON.stringify({
+            "type": "move",
+            "payload": {
+                "x": adminX + 1,
+                "y": adminY,
+                "userId": adminId
+            }
+        }))
+
+        const response = await getWsResponse(adminMsg)
+
+        expect(response.type).toBe('movement')
+        expect(response.payload.userId).toBe(adminId)
+        expect(response.payload.x).toBe(adminX + 1)
+        expect(response.payload.y).toBe(adminY)
+    })
+    
+    test('Unable to move more than one block at a time' , async ()=>{
+        adminWsClient.send(JSON.stringify({
+            "type": "move",
+            "payload": {
+                "x": adminX + 2,
+                "y": adminY,
+                "userId": adminId
+            }
+        }))
+
+        const response = await getWsResponse(adminMsg)
+
+        expect(response.type).toBe('movement-rejected')
+        expect(response.payload.x).toBe(adminX)
+        expect(response.payload.y).toBe(adminY)
+    })
+
+    test('Successfully left a room' , async ()=>{
+        adminWsClient.close()
+
+        const response = await getWsResponse(adminMsg)
+
+        expect(response.type).toBe('user-left')
+        expect(response.payload.userId).toBe(adminId)
+    })    
+})
+
+// test("Get back ack for joining the space", async () => {
+// test("User should not be able to move across the boundary of the wall", async () => {
+// test("User should not be able to move two blocks at the same time", async () => {
+// test("Correct movement should be broadcasted to the other sockets in the room",async () => {
